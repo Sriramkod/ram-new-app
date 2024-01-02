@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "872744557823",
+    "project_id": "sriramkoddev",
+    "storage_bucket": "sriramkoddev.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:872744557823:android:5704d32c4d2cb09cafc0ca",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDutlVh2hhtCYNVFtEnYnv7fO1A21Ek4sY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
