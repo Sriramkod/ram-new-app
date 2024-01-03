@@ -7,7 +7,7 @@ import 'package:flutter_application_2/registration_screen.dart';
 import 'firebase_options.dart';
 import 'package:flutter_application_2/otp.dart';
 import 'package:flutter_application_2/phone.dart';
-
+import 'package:flutter_application_2/reglogin.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
@@ -15,9 +15,14 @@ Future<void> main() async {
   );
 
   runApp(MaterialApp(
-    initialRoute: 'upload-file',
+    initialRoute: 'reg-login-home',
     debugShowCheckedModeBanner: false,
     routes: {
+
+//registration login page, home page
+
+'reg-login-home': (context) => RegLoginHome(),
+// Below is for uploading the documents...
       'upload-file': (context) => UploadApp(),
       'register-with-phone': (context) => PhoneRegistrationScreen(),
       'register': (context) => RegistrationScreen(),
