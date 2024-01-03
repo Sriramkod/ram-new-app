@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_application_2/index.dart';
 import 'package:progress_dialog2/progress_dialog2.dart';
 
 void main() {
@@ -57,101 +58,6 @@ class AuthenticationWrapper extends StatefulWidget {
   _AuthenticationWrapperState createState() => _AuthenticationWrapperState();
 }
 
-// class _AuthenticationWrapperState extends State<AuthenticationWrapper> {
-//   @override
-//   void initState() {
-//     super.initState();
-//     checkAuthenticationStatus();
-//   }
-
-// void checkAuthenticationStatus() {
-//   User? user = FirebaseAuth.instance.currentUser;
-
-//   if (user != null) {
-//     // User is already authenticated, navigate to the home page.
-//     Navigator.pushReplacement(
-//       context,
-//       MaterialPageRoute(builder: (context) => HomePage(user)),
-//     );
-//   }
-//   // User is not authenticated, continue with registration or login flow.
-// }
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       body: Center(
-//         child: CircularProgressIndicator(), // You can replace it with your UI
-//       ),
-//     );
-//   }
-// }
-
-// class RegistrationPage extends StatelessWidget {
-//   final TextEditingController phoneNumberController = TextEditingController();
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       appBar: AppBar(
-//         title: Text('Registration Page'),
-//       ),
-//       body: Padding(
-//         padding: EdgeInsets.all(16.0),
-//         child: Column(
-//           mainAxisAlignment: MainAxisAlignment.center,
-//           children: [
-//             TextField(
-//               controller: phoneNumberController,
-//               decoration: InputDecoration(labelText: 'Phone Number'),
-//             ),
-//             SizedBox(height: 16.0),
-//             ElevatedButton(
-//               onPressed: () async {
-//                 await verifyPhoneNumber(phoneNumberController.text, context);
-//               },
-//               child: Text('Register'),
-//             ),
-//           ],
-//         ),
-//       ),
-//     );
-//   }
-
-//   Future<void> verifyPhoneNumber(
-//       String phoneNumber, BuildContext context) async {
-//     await FirebaseAuth.instance.verifyPhoneNumber(
-//       phoneNumber: phoneNumber,
-//       verificationCompleted: (PhoneAuthCredential credential) async {
-//         await FirebaseAuth.instance.signInWithCredential(credential);
-//         // After successful login, navigate to the home page
-//         Navigator.pushReplacement(
-//           context,
-//           MaterialPageRoute(
-//               builder: (context) =>
-//                   HomePage(FirebaseAuth.instance.currentUser!)),
-//         );
-//       },
-//       verificationFailed: (FirebaseAuthException e) {
-//         // Handle verification failure
-//         print('Verification Failed: $e');
-//       },
-//       codeSent: (String verificationId, int? resendToken) {
-//         Navigator.push(
-//           context,
-//           MaterialPageRoute(
-//             builder: (context) => OtpVerificationScreen(verificationId),
-//           ),
-//         );
-//       },
-//       codeAutoRetrievalTimeout: (String verificationId) {
-//         // Auto-retrieval timed out
-//         print('Code Auto Retrieval Timeout');
-//       },
-//     );
-//   }
-// }
-
 class RegistrationPage extends StatefulWidget {
   @override
   _RegistrationPageState createState() => _RegistrationPageState();
@@ -160,8 +66,9 @@ class RegistrationPage extends StatefulWidget {
 class _RegistrationPageState extends State<RegistrationPage> {
   final TextEditingController phoneNumberController = TextEditingController();
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   late final ProgressDialog _progressDialog;
-  //= ProgressDialog();
+  // = ProgressDialog();
 
   @override
   Widget build(BuildContext context) {
@@ -183,9 +90,20 @@ class _RegistrationPageState extends State<RegistrationPage> {
             SizedBox(height: 16.0),
             ElevatedButton(
               onPressed: () async {
-                await _verifyPhoneNumber(phoneNumberController.text, context);
+                await _checkExistingUserAndRegister(
+                    phoneNumberController.text, context);
               },
               child: Text('Register'),
+            ),
+            SizedBox(height: 16.0),
+            TextButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => LoginPage()),
+                );
+              },
+              child: Text('Already have an account? Login'),
             ),
           ],
         ),
@@ -193,8 +111,49 @@ class _RegistrationPageState extends State<RegistrationPage> {
     );
   }
 
+  Future<void> _checkExistingUserAndRegister(
+      String phoneNumber, BuildContext context) async {
+    // Phone number validation for Indian numbers
+    if (phoneNumber.isEmpty) {
+      _showErrorDialog('Please enter a phone number.');
+      return;
+    }
+
+    // Regular expression for validating Indian phone numbers
+    RegExp indianNumberRegExp = RegExp(r'^\+91[1-9]\d{9}$');
+    if (!indianNumberRegExp.hasMatch(phoneNumber)) {
+      _showErrorDialog('Please enter a valid Indian phone number.');
+      return;
+    }
+
+    _progressDialog.show();
+
+    try {
+      // Check if the user already exists in Firestore
+      QuerySnapshot querySnapshot = await _firestore
+          .collection('users')
+          .where('phoneNumber', isEqualTo: phoneNumber)
+          .get();
+
+      if (querySnapshot.docs.isNotEmpty) {
+        // User already exists, show an error
+        _progressDialog.hide();
+        _showErrorDialog('User with this phone number already exists.');
+      } else {
+        // User doesn't exist, proceed with phone number verification
+        await _verifyPhoneNumber(phoneNumber, context);
+      }
+    } catch (e) {
+      _progressDialog.hide();
+      _showErrorDialog('An error occurred: $e');
+    }
+  }
+
   Future<void> _verifyPhoneNumber(
       String phoneNumber, BuildContext context) async {
+    // Continue with the phone number verification logic...
+    // (unchanged from the previous implementation)
+
     // Phone number validation for Indian numbers
     if (phoneNumber.isEmpty) {
       _showErrorDialog('Please enter a phone number.');
@@ -231,71 +190,23 @@ class _RegistrationPageState extends State<RegistrationPage> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => OtpVerificationScreen(verificationId),
+              builder: (context) =>
+                  OtpVerificationScreen(verificationId, phoneNumber),
             ),
           );
         },
         codeAutoRetrievalTimeout: (String verificationId) {
           _progressDialog.hide();
-          _showErrorDialog('Code Auto Retrieval Timeout');
+          //_showErrorDialog('Code Auto Retrieval Timeout');
         },
       );
     } catch (e) {
       _progressDialog.hide();
       _showErrorDialog('An error occurred: $e');
     }
+    // _progressDialog
+    //     .hide(); // Hide the progress dialog after the verification process
   }
-
-  // Future<void> _verifyPhoneNumber(
-  //     String phoneNumber, BuildContext context) async {
-  //   // Phone number validation
-  //   if (phoneNumber.isEmpty) {
-  //     _showErrorDialog('Please enter a phone number.');
-  //     return;
-  //   }
-
-  //   if (!RegExp(r'^\+\d{1,3}-\d{6,14}$').hasMatch(phoneNumber)) {
-  //     _showErrorDialog('Please enter a valid phone number.');
-  //     return;
-  //   }
-
-  //   _progressDialog.show();
-
-  //   try {
-  //     await _auth.verifyPhoneNumber(
-  //       phoneNumber: phoneNumber,
-  //       verificationCompleted: (PhoneAuthCredential credential) async {
-  //         await _auth.signInWithCredential(credential);
-  //         // After successful login, navigate to the home page
-  //         Navigator.pushReplacement(
-  //           context,
-  //           MaterialPageRoute(
-  //               builder: (context) => HomePage(_auth.currentUser!)),
-  //         );
-  //       },
-  //       verificationFailed: (FirebaseAuthException e) {
-  //         _progressDialog.hide();
-  //         _showErrorDialog('Verification Failed: ${e.message}');
-  //       },
-  //       codeSent: (String verificationId, int? resendToken) {
-  //         _progressDialog.hide();
-  //         Navigator.push(
-  //           context,
-  //           MaterialPageRoute(
-  //             builder: (context) => OtpVerificationScreen(verificationId),
-  //           ),
-  //         );
-  //       },
-  //       codeAutoRetrievalTimeout: (String verificationId) {
-  //         _progressDialog.hide();
-  //         _showErrorDialog('Code Auto Retrieval Timeout');
-  //       },
-  //     );
-  //   } catch (e) {
-  //     _progressDialog.hide();
-  //     _showErrorDialog('An error occurred: $e');
-  //   }
-  // }
 
   void _showErrorDialog(String message) {
     showDialog(
@@ -318,10 +229,124 @@ class _RegistrationPageState extends State<RegistrationPage> {
   }
 }
 
+class HomePage extends StatelessWidget {
+  final User user;
+
+  HomePage(this.user);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Home Page'),
+      ),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text('Welcome, ${user.displayName}'),
+            SizedBox(height: 16.0),
+            ElevatedButton(
+              onPressed: () async {
+                await FirebaseAuth.instance.signOut();
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => AuthenticationWrapper()),
+                );
+              },
+              child: Text('Log Out'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class AdditionalDetailsPage extends StatefulWidget {
+  final String phoneNumber; // Add phoneNumber parameter
+
+  AdditionalDetailsPage(this.phoneNumber);
+
+  @override
+  _AdditionalDetailsPageState createState() => _AdditionalDetailsPageState();
+}
+
+class _AdditionalDetailsPageState extends State<AdditionalDetailsPage> {
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  late final ProgressDialog _progressDialog;
+  // = ProgressDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    _progressDialog = ProgressDialog(context);
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Additional Details'),
+      ),
+      body: Padding(
+        padding: EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+                'Phone Number: ${widget.phoneNumber}'), // Display the phone number
+            SizedBox(height: 16.0),
+            TextField(
+              controller: nameController,
+              decoration: InputDecoration(labelText: 'Name'),
+            ),
+            SizedBox(height: 16.0),
+            TextField(
+              controller: passwordController,
+              obscureText: true,
+              decoration: InputDecoration(labelText: 'Password'),
+            ),
+            SizedBox(height: 16.0),
+            ElevatedButton(
+              onPressed: () async {
+                await _storeUserDetails(
+                  widget.phoneNumber,
+                  nameController.text,
+                  passwordController.text,
+                );
+
+                // After storing details, navigate to the home page
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => HomePage(_auth.currentUser!)),
+                );
+              },
+              child: Text('Complete Registration'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _storeUserDetails(
+      String phoneNumber, String name, String password) async {
+    // Store additional information in Firestore along with the phone number
+    await _firestore.collection('users').doc(phoneNumber).set({
+      'name': name,
+      'phoneNumber': phoneNumber,
+      'password': password,
+      // Add more fields as needed
+    });
+  }
+}
+
 class OtpVerificationScreen extends StatefulWidget {
   final String verificationId;
+  final String phoneNumber; // Add phoneNumber parameter
 
-  OtpVerificationScreen(this.verificationId);
+  OtpVerificationScreen(this.verificationId, this.phoneNumber);
 
   @override
   _OtpVerificationScreenState createState() => _OtpVerificationScreenState();
@@ -382,10 +407,12 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
       _progressDialog.hide();
 
-      // After successful login, navigate to the additional details page
+      // Pass the phone number to the AdditionalDetailsPage
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => AdditionalDetailsPage()),
+        MaterialPageRoute(
+          builder: (context) => AdditionalDetailsPage(widget.phoneNumber),
+        ),
       );
     } catch (e) {
       _progressDialog.hide();
@@ -414,67 +441,29 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   }
 }
 
-// class OtpVerificationScreen extends StatelessWidget {
-//   final String verificationId;
-//   final TextEditingController otpController = TextEditingController();
+class LoginPage extends StatefulWidget {
+  @override
+  _LoginPageState createState() => _LoginPageState();
+}
 
-//   OtpVerificationScreen(this.verificationId);
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       appBar: AppBar(
-//         title: Text('OTP Verification'),
-//       ),
-//       body: Padding(
-//         padding: EdgeInsets.all(16.0),
-//         child: Column(
-//           mainAxisAlignment: MainAxisAlignment.center,
-//           children: [
-//             TextField(
-//               controller: otpController,
-//               decoration: InputDecoration(labelText: 'Enter OTP'),
-//             ),
-//             SizedBox(height: 16.0),
-//             ElevatedButton(
-//               onPressed: () async {
-//                 await signInWithPhoneNumber(
-//                     verificationId, otpController.text, context);
-//               },
-//               child: Text('Verify'),
-//             ),
-//           ],
-//         ),
-//       ),
-//     );
-//   }
-
-//   Future<void> signInWithPhoneNumber(
-//       String verificationId, String smsCode, BuildContext context) async {
-//     PhoneAuthCredential credential = PhoneAuthProvider.credential(
-//       verificationId: verificationId,
-//       smsCode: smsCode,
-//     );
-
-//     await FirebaseAuth.instance.signInWithCredential(credential);
-
-//     // After successful login, navigate to the additional details page
-//     Navigator.pushReplacement(
-//       context,
-//       MaterialPageRoute(builder: (context) => AdditionalDetailsPage()),
-//     );
-//   }
-// }
-
-class AdditionalDetailsPage extends StatelessWidget {
-  final TextEditingController nameController = TextEditingController();
+class _LoginPageState extends State<LoginPage> {
+  final TextEditingController phoneNumberController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  late final ProgressDialog _progressDialog;
+
+  @override
+  void initState() {
+    super.initState();
+    _progressDialog = ProgressDialog(context);
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Additional Details'),
+        title: Text('Login Page'),
       ),
       body: Padding(
         padding: EdgeInsets.all(16.0),
@@ -482,8 +471,9 @@ class AdditionalDetailsPage extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             TextField(
-              controller: nameController,
-              decoration: InputDecoration(labelText: 'Name'),
+              controller: phoneNumberController,
+              keyboardType: TextInputType.phone,
+              decoration: InputDecoration(labelText: 'Phone Number'),
             ),
             SizedBox(height: 16.0),
             TextField(
@@ -494,21 +484,22 @@ class AdditionalDetailsPage extends StatelessWidget {
             SizedBox(height: 16.0),
             ElevatedButton(
               onPressed: () async {
-                await storeUserDetails(
-                  FirebaseAuth.instance.currentUser!.uid,
-                  nameController.text,
+                await _loginUser(
+                  phoneNumberController.text,
                   passwordController.text,
                 );
-
-                // After storing details, navigate to the home page
-                Navigator.pushReplacement(
+              },
+              child: Text('Login'),
+            ),
+            SizedBox(height: 16.0),
+            TextButton(
+              onPressed: () {
+                Navigator.push(
                   context,
-                  MaterialPageRoute(
-                      builder: (context) =>
-                          HomePage(FirebaseAuth.instance.currentUser!)),
+                  MaterialPageRoute(builder: (context) => RegistrationPage()),
                 );
               },
-              child: Text('Complete Registration'),
+              child: Text('Don\'t have an account? Register'),
             ),
           ],
         ),
@@ -516,46 +507,76 @@ class AdditionalDetailsPage extends StatelessWidget {
     );
   }
 
-  Future<void> storeUserDetails(
-      String uid, String name, String password) async {
-    await FirebaseFirestore.instance.collection('users').doc(uid).set({
-      'name': name,
-      'password': password,
-    });
+  Future<void> _loginUser(String phoneNumber, String password) async {
+    // Phone number validation for Indian numbers
+    if (phoneNumber.isEmpty) {
+      _showErrorDialog('Please enter a phone number.');
+      return;
+    }
+
+    // Password validation
+    if (password.isEmpty) {
+      _showErrorDialog('Please enter a password.');
+      return;
+    }
+
+    // Regular expression for validating Indian phone numbers
+    RegExp indianNumberRegExp = RegExp(r'^\+91[1-9]\d{9}$');
+    if (!indianNumberRegExp.hasMatch(phoneNumber)) {
+      _showErrorDialog('Please enter a valid Indian phone number.');
+      return;
+    }
+
+    _progressDialog.show();
+
+    try {
+      // Check if the user exists in Firestore
+      DocumentSnapshot userDoc =
+          await _firestore.collection('users').doc(phoneNumber).get();
+
+      if (userDoc.exists) {
+        // User exists, validate password
+        var userData = userDoc.data() as Map<String, dynamic>?; // Cast to Map
+        if (userData != null && userData['password'] == password) {
+          // Password is correct, navigate to the home page
+          _progressDialog.hide();
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => UploadApp()),
+          );
+        } else {
+          _progressDialog
+              .hide(); // Hide the progress dialog on unsuccessful login
+          _showErrorDialog('Incorrect password. Please try again.');
+        }
+      } else {
+        _progressDialog
+            .hide(); // Hide the progress dialog if the user doesn't exist
+        _showErrorDialog('User not found. Please register first.');
+      }
+    } catch (e) {
+      _progressDialog.hide(); // Hide the progress dialog on error
+      _showErrorDialog('An error occurred: $e');
+    }
   }
-}
 
-class HomePage extends StatelessWidget {
-  final User user;
-
-  HomePage(this.user);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Home Page'),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text('Welcome, ${user.displayName}!'),
-            SizedBox(height: 16.0),
-            ElevatedButton(
-              onPressed: () async {
-                await FirebaseAuth.instance.signOut();
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => AuthenticationWrapper()),
-                );
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Error'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
               },
-              child: Text('Log Out'),
+              child: Text('OK'),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
